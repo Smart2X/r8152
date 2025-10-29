@@ -1,0 +1,52 @@
+name: Build r8152 for DSM 7.3
+on:
+  workflow_dispatch:
+    inputs:
+      toolchain_url:
+        description: 'URL to Synology toolchain tarball for DSM 7.3'
+        required: true
+      kernel_url:
+        description: 'URL to DSM 7.3 kernel source/headers tarball'
+        required: true
+      dsm_version:
+        description: 'DSM version label'
+        required: false
+        default: '7.3'
+      platform:
+        description: 'Target platform / arch label'
+        required: false
+        default: 'geminilake'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Make CI scripts executable
+        run: chmod +x ci/*.sh || true
+      - name: Download toolchain and kernel
+        run: ./ci/download_toolchain.sh "${{ github.event.inputs.toolchain_url }}" "${{ github.event.inputs.kernel_url }}"
+        env:
+          GITHUB_ENV: ${{ env.GITHUB_ENV }}
+      - name: Setup environment
+        run: ./ci/setup_env.sh
+        env:
+          TOOLCHAIN_DIR: ${{ env.TOOLCHAIN_DIR }}
+          KERNEL_DIR: ${{ env.KERNEL_DIR }}
+      - name: Build module
+        run: |
+          export DSM_VERSION="${{ github.event.inputs.dsm_version }}"
+          export PLATFORM="${{ github.event.inputs.platform }}"
+          ./ci/build_module.sh
+      - name: Package
+        run: |
+          export DSM_VERSION="${{ github.event.inputs.dsm_version }}"
+          export PLATFORM="${{ github.event.inputs.platform }}"
+          ./ci/package_spk.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8152-dsm-artifacts
+          path: |
+            out/*.tar.gz
+            artifacts/*.ko
